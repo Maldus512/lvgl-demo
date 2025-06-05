@@ -1,0 +1,8 @@
+*.o
+build
+.env
+.luaenv
+.pyenv
+.ninja_deps
+.ninja_log
+.cache
