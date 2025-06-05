@@ -1,29 +1,30 @@
-local svadilfari = require("svadilfari")
-
-
 local configure = function(config)
-    config.variables.cc = "gcc"
-
-    local compile = config.rule {
-        command = "$cc -MD -MF $out.d $cflags -Ilib/lvgl -c -o $out $in",
-        depfile = "$out.d",
+    local compile = config.compileObject {
+        compiler = "gcc",
         deps = "gcc",
+        includes = "lib/lvgl",
+        cflags = { "-Og", "-pedantic", "-Wall", "-Wextra" },
     }
-    local link = config.rule("$cc -o $out $in $ldflags")
+    local link    = config.linkElf { linker = "gcc", libs = "SDL2" }
 
-    config.generateCompilationDatabase("build/compile_commands.json")
+    local objects = config.buildSources(
+        compile,
+        {
+            "src/main.c",
+            { path = "lib/lvgl/src", recursive = true },
+        }
+    )
 
-    local objects = {}
-    for _, source in ipairs(svadilfari.find { path = "src", extension = "c" }) do
-        local output = compile { inputs = { source }, target = svadilfari.toExtension("o") }
-        table.insert(objects, output)
-    end
-    for _, source in ipairs(svadilfari.find { path = "lib/lvgl/src", extension = "c", recursive = true }) do
-        local output = compile { inputs = { source }, target = svadilfari.toExtension("o") }
-        table.insert(objects, output)
-    end
+    local compDb  = config.generateCompilationDatabase()
+    local elf     = link { inputs = objects, implicit = compDb, target = "build/main" }
+    config.command {
+        name = "run",
+        command = elf,
+        dependencies = elf,
+    }
 
-    config.aliases.all = link { inputs = objects, implicit = "build/compile_commands.json", variables = { ldflags = "-lSDL2" }, target = "build/main" }
+    config.aliases.all = elf
+    config.default(elf)
 
     return config
 end
